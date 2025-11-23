@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Extrator de Texto - PDF, Word, PowerPoint & TXT</title>
+    <title>Extrator de Texto - PDF, Word, PowerPoint, Excel, CSV & TXT</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -332,7 +333,7 @@
     <div class="container">
         <div class="header">
             <h1>📄 Extrator de Texto Universal</h1>
-            <p>Arraste arquivos, pastas inteiras, PDFs, Word (DOCX), PowerPoint (PPTX), TXT ou ZIPs para extrair todo o texto de uma vez</p>
+            <p>Arraste arquivos, pastas inteiras, PDFs, Word, PowerPoint, Excel, CSV, TXT ou ZIPs para extrair todo o texto de uma vez</p>
         </div>
 
         <div class="main-content">
@@ -341,7 +342,7 @@
                     <div class="drop-icon">📁</div>
                     <h3>Arraste seus arquivos, pastas ou ZIP aqui</h3>
                     <p>Ou clique para selecionar<br>
-                    <small>Suporta PDF, Word (DOCX/DOC), PowerPoint (PPTX), TXT, pastas inteiras e ZIPs</small><br>
+                    <small>Suporta PDF, Word (DOCX/DOC), PowerPoint (PPTX), Excel (XLSX/XLS), CSV, TXT, pastas e ZIPs</small><br>
                     <strong style="color: #4CAF50;">✨ Modo Cumulativo: Adicione múltiplos arquivos em várias etapas!</strong></p>
                     <button class="select-files-btn" onclick="document.getElementById('fileInput').click()">
                         Selecionar Arquivos
@@ -352,7 +353,7 @@
                 </div>
             </div>
 
-            <input type="file" id="fileInput" class="file-input" multiple accept=".pdf,.pptx,.docx,.doc,.txt,.zip" />
+            <input type="file" id="fileInput" class="file-input" multiple accept=".pdf,.pptx,.docx,.doc,.xlsx,.xls,.csv,.txt,.zip" />
             <input type="file" id="folderInput" class="file-input" webkitdirectory directory multiple />
 
             <div class="progress-section" id="progressSection">
@@ -527,13 +528,19 @@
                         file.type === 'application/x-zip-compressed' ||
                         file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
                         file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+                        file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                        file.type === 'application/vnd.ms-excel' ||
                         file.type === 'application/msword' ||
                         file.type === 'text/plain' ||
+                        file.type === 'text/csv' ||
                         fileName.endsWith('.pdf') ||
                         fileName.endsWith('.zip') ||
                         fileName.endsWith('.pptx') ||
                         fileName.endsWith('.docx') ||
                         fileName.endsWith('.doc') ||
+                        fileName.endsWith('.xlsx') ||
+                        fileName.endsWith('.xls') ||
+                        fileName.endsWith('.csv') ||
                         fileName.endsWith('.txt')
                     );
                 });
@@ -620,6 +627,10 @@
                     const isWord = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
                                    file.type === 'application/msword' ||
                                    fileName.endsWith('.docx') || fileName.endsWith('.doc');
+                    const isExcel = file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                                    file.type === 'application/vnd.ms-excel' ||
+                                    fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+                    const isCSV = file.type === 'text/csv' || fileName.endsWith('.csv');
                     const isTXT = file.type === 'text/plain' || fileName.endsWith('.txt');
 
                     if (isZip) {
@@ -654,6 +665,24 @@
                             size: file.size,
                             isFile: true,
                             type: 'word'
+                        });
+                        totalFilesCount++;
+                    } else if (isExcel) {
+                        allPDFsToProcess.push({
+                            filename: file.name,
+                            data: file,
+                            size: file.size,
+                            isFile: true,
+                            type: 'excel'
+                        });
+                        totalFilesCount++;
+                    } else if (isCSV) {
+                        allPDFsToProcess.push({
+                            filename: file.name,
+                            data: file,
+                            size: file.size,
+                            isFile: true,
+                            type: 'csv'
                         });
                         totalFilesCount++;
                     } else if (isTXT) {
@@ -709,6 +738,18 @@
                                 text = await this.extractTextFromWord(fileItem.data);
                             } else {
                                 text = await this.extractTextFromWordBuffer(fileItem.data);
+                            }
+                        } else if (fileType === 'excel') {
+                            if (fileItem.isFile) {
+                                text = await this.extractTextFromExcel(fileItem.data);
+                            } else {
+                                text = await this.extractTextFromExcelBuffer(fileItem.data);
+                            }
+                        } else if (fileType === 'csv') {
+                            if (fileItem.isFile) {
+                                text = await this.extractTextFromCSV(fileItem.data);
+                            } else {
+                                text = await this.extractTextFromCSVBuffer(fileItem.data);
                             }
                         } else if (fileType === 'txt') {
                             if (fileItem.isFile) {
@@ -866,6 +907,51 @@
                 return decoder.decode(arrayBuffer);
             }
 
+            async extractTextFromExcel(file) {
+                const arrayBuffer = await file.arrayBuffer();
+                return await this.extractTextFromExcelBuffer(arrayBuffer);
+            }
+
+            async extractTextFromExcelBuffer(arrayBuffer) {
+                try {
+                    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                    let fullText = '';
+
+                    // Processar cada planilha
+                    workbook.SheetNames.forEach((sheetName, index) => {
+                        const worksheet = workbook.Sheets[sheetName];
+
+                        // Converter para CSV para obter os dados formatados
+                        const csvData = XLSX.utils.sheet_to_csv(worksheet);
+
+                        if (csvData.trim()) {
+                            fullText += `--- Planilha: ${sheetName} ---\n`;
+                            fullText += csvData + '\n\n';
+                        }
+                    });
+
+                    return fullText.trim();
+                } catch (error) {
+                    throw new Error(`Erro ao processar Excel: ${error.message}`);
+                }
+            }
+
+            async extractTextFromCSV(file) {
+                const text = await file.text();
+                return this.formatCSVText(text);
+            }
+
+            async extractTextFromCSVBuffer(arrayBuffer) {
+                const decoder = new TextDecoder('utf-8');
+                const text = decoder.decode(arrayBuffer);
+                return this.formatCSVText(text);
+            }
+
+            formatCSVText(csvText) {
+                // Retornar o CSV formatado de forma legível
+                return csvText.trim();
+            }
+
             async extractFilesFromZip(zipFile, zipFileName) {
                 const arrayBuffer = await zipFile.arrayBuffer();
                 const zip = await JSZip.loadAsync(arrayBuffer);
@@ -919,6 +1005,30 @@
                                 data: fileData,
                                 size: fileData.byteLength,
                                 type: 'word'
+                            });
+                        }
+                        // Verificar se é um Excel
+                        else if (lowerFilename.endsWith('.xlsx') || lowerFilename.endsWith('.xls')) {
+                            const fileData = await file.async('arraybuffer');
+                            const fullPath = `${zipFileName}/${filename}`;
+
+                            extractedFiles.push({
+                                filename: fullPath,
+                                data: fileData,
+                                size: fileData.byteLength,
+                                type: 'excel'
+                            });
+                        }
+                        // Verificar se é um CSV
+                        else if (lowerFilename.endsWith('.csv')) {
+                            const fileData = await file.async('arraybuffer');
+                            const fullPath = `${zipFileName}/${filename}`;
+
+                            extractedFiles.push({
+                                filename: fullPath,
+                                data: fileData,
+                                size: fileData.byteLength,
+                                type: 'csv'
                             });
                         }
                         // Verificar se é um TXT
