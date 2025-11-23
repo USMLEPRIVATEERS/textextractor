@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extrator de Texto - PDF & PowerPoint</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 40px;
+        }
+
+        .drop-zone {
+            border: 3px dashed #ddd;
+            border-radius: 15px;
+            padding: 60px 20px;
+            text-align: center;
+            background: #fafafa;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 30px;
+        }
+
+        .drop-zone.dragover {
+            border-color: #4CAF50;
+            background: #f0f8f0;
+            transform: scale(1.02);
+        }
+
+        .drop-zone-content {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .drop-icon {
+            font-size: 4em;
+            color: #4CAF50;
+            margin-bottom: 20px;
+        }
+
+        .drop-zone h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        .drop-zone p {
+            color: #666;
+            font-size: 1.1em;
+            line-height: 1.6;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .select-files-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 1em;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background 0.3s ease;
+        }
+
+        .select-files-btn:hover {
+            background: #45a049;
+        }
+
+        .progress-section {
+            display: none;
+            margin-bottom: 30px;
+        }
+
+        .progress-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .progress-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .progress-bar-container {
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            height: 20px;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar {
+            background: linear-gradient(45deg, #4CAF50, #8BC34A);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 10px;
+        }
+
+        .progress-text {
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .current-file {
+            background: #e3f2fd;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 0.9em;
+            color: #1976d2;
+            word-break: break-all;
+        }
+
+        .results-section {
+            display: none;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .action-btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .copy-btn {
+            background: #2196F3;
+            color: white;
+        }
+
+        .copy-btn:hover {
+            background: #1976D2;
+        }
+
+        .download-btn {
+            background: #FF9800;
+            color: white;
+        }
+
+        .download-btn:hover {
+            background: #F57C00;
+        }
+
+        .clear-btn {
+            background: #f44336;
+            color: white;
+        }
+
+        .clear-btn:hover {
+            background: #d32f2f;
+        }
+
+        .results-summary {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .text-preview {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
+        .error-list {
+            background: #ffebee;
+            border: 1px solid #ffcdd2;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .error-list h4 {
+            color: #c62828;
+            margin-bottom: 10px;
+        }
+
+        .error-item {
+            color: #d32f2f;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+            padding-left: 15px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: #4CAF50;
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.error {
+            background: #f44336;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+
+            .header {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .main-content {
+                padding: 20px;
+            }
+
+            .drop-zone {
+                padding: 40px 15px;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
+
+            .action-btn {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📄 Extrator de Texto PDF & PowerPoint</h1>
+            <p>Arraste arquivos, pastas inteiras, PDFs, PPTX ou ZIPs para extrair todo o texto de uma vez</p>
+        </div>
+
+        <div class="main-content">
+            <div class="drop-zone" id="dropZone">
+                <div class="drop-zone-content">
+                    <div class="drop-icon">📁</div>
+                    <h3>Arraste seus arquivos, pastas, PDF, PPTX ou ZIP aqui</h3>
+                    <p>Ou clique para selecionar<br>
+                    <small>Suporta PDFs, PowerPoints (PPTX), pastas inteiras e ZIPs (incluindo pastas aninhadas)</small></p>
+                    <button class="select-files-btn" onclick="document.getElementById('fileInput').click()">
+                        Selecionar Arquivos
+                    </button>
+                    <button class="select-files-btn" onclick="document.getElementById('folderInput').click()" style="margin-left: 10px;">
+                        📁 Selecionar Pasta
+                    </button>
+                </div>
+            </div>
+
+            <input type="file" id="fileInput" class="file-input" multiple accept=".pdf,.pptx,.zip" />
+            <input type="file" id="folderInput" class="file-input" webkitdirectory directory multiple />
+
+            <div class="progress-section" id="progressSection">
+                <div class="progress-info">
+                    <div class="progress-stats">
+                        <div class="stat-item">
+                            <div class="stat-number" id="totalFiles">0</div>
+                            <div class="stat-label">Total de Arquivos</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="processedFiles">0</div>
+                            <div class="stat-label">Processados</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="successFiles">0</div>
+                            <div class="stat-label">Sucesso</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="errorFiles">0</div>
+                            <div class="stat-label">Erros</div>
+                        </div>
+                    </div>
+                    
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">Preparando...</div>
+                    
+                    <div class="current-file" id="currentFile" style="display: none;"></div>
+                </div>
+            </div>
+
+            <div class="results-section" id="resultsSection">
+                <div class="action-buttons">
+                    <button class="action-btn copy-btn" id="copyBtn">
+                        📋 Copiar Todo o Texto
+                    </button>
+                    <button class="action-btn download-btn" id="downloadBtn">
+                        💾 Baixar como TXT
+                    </button>
+                    <button class="action-btn clear-btn" id="clearBtn">
+                        🗑️ Limpar Resultados
+                    </button>
+                </div>
+
+                <div class="results-summary" id="resultsSummary"></div>
+
+                <div class="text-preview" id="textPreview"></div>
+
+                <div class="error-list" id="errorList">
+                    <h4>⚠️ Arquivos com Erro:</h4>
+                    <div id="errorItems"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification"></div>
+
+    <script>
+        // Configuração do PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        class PDFTextExtractor {
+            constructor() {
+                this.files = [];
+                this.extractedTexts = [];
+                this.errors = [];
+                this.isProcessing = false;
+                
+                this.initializeElements();
+                this.setupEventListeners();
+            }
+
+            initializeElements() {
+                this.dropZone = document.getElementById('dropZone');
+                this.fileInput = document.getElementById('fileInput');
+                this.folderInput = document.getElementById('folderInput');
+                this.progressSection = document.getElementById('progressSection');
+                this.resultsSection = document.getElementById('resultsSection');
+                this.notification = document.getElementById('notification');
+                
+                // Elementos de progresso
+                this.totalFilesEl = document.getElementById('totalFiles');
+                this.processedFilesEl = document.getElementById('processedFiles');
+                this.successFilesEl = document.getElementById('successFiles');
+                this.errorFilesEl = document.getElementById('errorFiles');
+                this.progressBar = document.getElementById('progressBar');
+                this.progressText = document.getElementById('progressText');
+                this.currentFileEl = document.getElementById('currentFile');
+                
+                // Elementos de resultado
+                this.copyBtn = document.getElementById('copyBtn');
+                this.downloadBtn = document.getElementById('downloadBtn');
+                this.clearBtn = document.getElementById('clearBtn');
+                this.resultsSummary = document.getElementById('resultsSummary');
+                this.textPreview = document.getElementById('textPreview');
+                this.errorList = document.getElementById('errorList');
+                this.errorItems = document.getElementById('errorItems');
+            }
+
+            setupEventListeners() {
+                // Drag and drop
+                this.dropZone.addEventListener('dragover', this.handleDragOver.bind(this));
+                this.dropZone.addEventListener('dragleave', this.handleDragLeave.bind(this));
+                this.dropZone.addEventListener('drop', this.handleDrop.bind(this));
+                this.dropZone.addEventListener('click', () => this.fileInput.click());
+
+                // File input
+                this.fileInput.addEventListener('change', this.handleFileSelect.bind(this));
+                this.folderInput.addEventListener('change', this.handleFileSelect.bind(this));
+
+                // Action buttons
+                this.copyBtn.addEventListener('click', this.copyToClipboard.bind(this));
+                this.downloadBtn.addEventListener('click', this.downloadAsText.bind(this));
+                this.clearBtn.addEventListener('click', this.clearResults.bind(this));
+            }
+
+            handleDragOver(e) {
+                e.preventDefault();
+                this.dropZone.classList.add('dragover');
+            }
+
+            handleDragLeave(e) {
+                e.preventDefault();
+                this.dropZone.classList.remove('dragover');
+            }
+
+            async handleDrop(e) {
+                e.preventDefault();
+                this.dropZone.classList.remove('dragover');
+
+                // Coletar todos os arquivos (incluindo de pastas)
+                const allFiles = [];
+
+                // Verificar se há items (suporta pastas arrastadas)
+                if (e.dataTransfer.items) {
+                    const items = Array.from(e.dataTransfer.items);
+
+                    for (const item of items) {
+                        if (item.kind === 'file') {
+                            const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+
+                            if (entry) {
+                                if (entry.isDirectory) {
+                                    // É uma pasta - processar recursivamente
+                                    const dirFiles = await this.readDirectoryRecursive(entry);
+                                    allFiles.push(...dirFiles);
+                                } else {
+                                    // É um arquivo
+                                    const file = item.getAsFile();
+                                    if (file) allFiles.push(file);
+                                }
+                            } else {
+                                // Fallback para navegadores antigos
+                                const file = item.getAsFile();
+                                if (file) allFiles.push(file);
+                            }
+                        }
+                    }
+                } else {
+                    // Fallback para navegadores que não suportam items
+                    allFiles.push(...Array.from(e.dataTransfer.files));
+                }
+
+                // Filtrar apenas arquivos suportados
+                const files = allFiles.filter(file => {
+                    const fileName = file.name.toLowerCase();
+                    return (
+                        file.type === 'application/pdf' ||
+                        file.type === 'application/zip' ||
+                        file.type === 'application/x-zip-compressed' ||
+                        file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+                        fileName.endsWith('.pdf') ||
+                        fileName.endsWith('.zip') ||
+                        fileName.endsWith('.pptx')
+                    );
+                });
+
+                if (files.length === 0) {
+                    this.showNotification('Nenhum arquivo PDF, PPTX ou ZIP encontrado!', 'error');
+                    return;
+                }
+
+                this.processFiles(files);
+            }
+
+            // Função auxiliar para ler pastas recursivamente
+            async readDirectoryRecursive(directoryEntry) {
+                const files = [];
+                const dirReader = directoryEntry.createReader();
+
+                const readEntries = () => {
+                    return new Promise((resolve, reject) => {
+                        dirReader.readEntries(resolve, reject);
+                    });
+                };
+
+                let entries = await readEntries();
+
+                while (entries.length > 0) {
+                    for (const entry of entries) {
+                        if (entry.isFile) {
+                            const file = await new Promise((resolve, reject) => {
+                                entry.file(resolve, reject);
+                            });
+                            files.push(file);
+                        } else if (entry.isDirectory) {
+                            const subFiles = await this.readDirectoryRecursive(entry);
+                            files.push(...subFiles);
+                        }
+                    }
+                    entries = await readEntries();
+                }
+
+                return files;
+            }
+
+            handleFileSelect(e) {
+                const files = Array.from(e.target.files);
+                this.processFiles(files);
+            }
+
+            async processFiles(files) {
+                if (this.isProcessing) {
+                    this.showNotification('Processamento já em andamento!', 'error');
+                    return;
+                }
+
+                this.isProcessing = true;
+                this.files = files;
+                this.extractedTexts = [];
+                this.errors = [];
+
+                // Mostrar seção de progresso
+                this.progressSection.style.display = 'block';
+                this.resultsSection.style.display = 'none';
+
+                // Primeiro, expandir arquivos ZIP
+                let allPDFsToProcess = [];
+                let totalFilesCount = 0;
+
+                this.progressText.textContent = 'Analisando arquivos...';
+
+                for (const file of files) {
+                    const fileName = file.name.toLowerCase();
+                    const isZip = file.type === 'application/zip' ||
+                                  file.type === 'application/x-zip-compressed' ||
+                                  fileName.endsWith('.zip');
+                    const isPPTX = file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+                                   fileName.endsWith('.pptx');
+                    const isPDF = file.type === 'application/pdf' || fileName.endsWith('.pdf');
+
+                    if (isZip) {
+                        try {
+                            this.currentFileEl.style.display = 'block';
+                            this.currentFileEl.textContent = `Extraindo arquivos de: ${file.name}`;
+
+                            const filesInZip = await this.extractFilesFromZip(file, file.name);
+                            allPDFsToProcess.push(...filesInZip);
+                            totalFilesCount += filesInZip.length;
+
+                            await new Promise(resolve => setTimeout(resolve, 10));
+                        } catch (error) {
+                            this.errors.push({
+                                filename: file.name,
+                                error: `Erro ao extrair ZIP: ${error.message}`
+                            });
+                        }
+                    } else if (isPPTX) {
+                        allPDFsToProcess.push({
+                            filename: file.name,
+                            data: file,
+                            size: file.size,
+                            isFile: true,
+                            type: 'pptx'
+                        });
+                        totalFilesCount++;
+                    } else if (isPDF) {
+                        allPDFsToProcess.push({
+                            filename: file.name,
+                            data: file,
+                            size: file.size,
+                            isFile: true,
+                            type: 'pdf'
+                        });
+                        totalFilesCount++;
+                    }
+                }
+
+                // Inicializar contadores
+                this.totalFilesEl.textContent = totalFilesCount;
+                this.processedFilesEl.textContent = '0';
+                this.successFilesEl.textContent = '0';
+                this.errorFilesEl.textContent = this.errors.length;
+                this.progressBar.style.width = '0%';
+                this.progressText.textContent = 'Iniciando extração de texto...';
+
+                // Processar todos os arquivos (PDFs e PPTXs)
+                for (let i = 0; i < allPDFsToProcess.length; i++) {
+                    const fileItem = allPDFsToProcess[i];
+
+                    // Mostrar arquivo atual
+                    this.currentFileEl.style.display = 'block';
+                    this.currentFileEl.textContent = `Processando: ${fileItem.filename}`;
+
+                    try {
+                        let text;
+                        const fileType = fileItem.type || 'pdf'; // Default para PDF para compatibilidade
+
+                        if (fileType === 'pptx') {
+                            if (fileItem.isFile) {
+                                text = await this.extractTextFromPPTX(fileItem.data);
+                            } else {
+                                text = await this.extractTextFromPPTXBuffer(fileItem.data);
+                            }
+                        } else {
+                            if (fileItem.isFile) {
+                                text = await this.extractTextFromPDF(fileItem.data);
+                            } else {
+                                text = await this.extractTextFromPDFBuffer(fileItem.data);
+                            }
+                        }
+
+                        this.extractedTexts.push({
+                            filename: fileItem.filename,
+                            text: text,
+                            size: fileItem.size
+                        });
+                        this.successFilesEl.textContent = this.extractedTexts.length;
+                    } catch (error) {
+                        this.errors.push({
+                            filename: fileItem.filename,
+                            error: error.message
+                        });
+                        this.errorFilesEl.textContent = this.errors.length;
+                    }
+
+                    // Atualizar progresso
+                    const processed = i + 1;
+                    this.processedFilesEl.textContent = processed;
+                    const percentage = (processed / totalFilesCount) * 100;
+                    this.progressBar.style.width = percentage + '%';
+                    this.progressText.textContent = `${processed} de ${totalFilesCount} arquivos processados (${percentage.toFixed(1)}%)`;
+
+                    // Pequeno delay para não travar a interface
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+
+                this.currentFileEl.style.display = 'none';
+                this.isProcessing = false;
+                this.showResults();
+            }
+
+            async extractTextFromPDF(file) {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+                let fullText = '';
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    fullText += pageText + '\n\n';
+                }
+
+                return fullText.trim();
+            }
+
+            async extractTextFromPDFBuffer(arrayBuffer) {
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+                let fullText = '';
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    fullText += pageText + '\n\n';
+                }
+
+                return fullText.trim();
+            }
+
+            async extractTextFromPPTX(file) {
+                const arrayBuffer = await file.arrayBuffer();
+                return await this.extractTextFromPPTXBuffer(arrayBuffer);
+            }
+
+            async extractTextFromPPTXBuffer(arrayBuffer) {
+                const zip = await JSZip.loadAsync(arrayBuffer);
+                let fullText = '';
+
+                // Obter todos os arquivos de slides e ordenar
+                const slideFiles = Object.keys(zip.files)
+                    .filter(name => name.match(/ppt\/slides\/slide\d+\.xml$/))
+                    .sort((a, b) => {
+                        const numA = parseInt(a.match(/slide(\d+)\.xml$/)[1]);
+                        const numB = parseInt(b.match(/slide(\d+)\.xml$/)[1]);
+                        return numA - numB;
+                    });
+
+                // Processar cada slide
+                for (let i = 0; i < slideFiles.length; i++) {
+                    const slideFile = slideFiles[i];
+                    const xmlContent = await zip.files[slideFile].async('text');
+
+                    // Extrair texto do slide usando DOMParser nativo
+                    const slideText = this.extractTextFromSlideXML(xmlContent);
+
+                    if (slideText.trim()) {
+                        fullText += `--- Slide ${i + 1} ---\n${slideText}\n\n`;
+                    }
+                }
+
+                return fullText.trim();
+            }
+
+            extractTextFromSlideXML(xmlString) {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
+
+                // Encontrar todos os elementos <a:t> (namespace-aware)
+                const textElements = xmlDoc.getElementsByTagName('a:t');
+                const texts = [];
+
+                for (let i = 0; i < textElements.length; i++) {
+                    const textContent = textElements[i].textContent;
+                    if (textContent && textContent.trim()) {
+                        texts.push(textContent.trim());
+                    }
+                }
+
+                return texts.join(' ');
+            }
+
+            async extractFilesFromZip(zipFile, zipFileName) {
+                const arrayBuffer = await zipFile.arrayBuffer();
+                const zip = await JSZip.loadAsync(arrayBuffer);
+                const extractedFiles = [];
+
+                // Função recursiva para percorrer todos os arquivos no ZIP
+                const processZipEntry = async (zipObject, path = '') => {
+                    const files = Object.keys(zipObject.files);
+
+                    for (const filename of files) {
+                        const file = zipObject.files[filename];
+
+                        // Ignorar diretórios
+                        if (file.dir) {
+                            continue;
+                        }
+
+                        const lowerFilename = filename.toLowerCase();
+
+                        // Verificar se é um PDF
+                        if (lowerFilename.endsWith('.pdf')) {
+                            const fileData = await file.async('arraybuffer');
+                            const fullPath = `${zipFileName}/${filename}`;
+
+                            extractedFiles.push({
+                                filename: fullPath,
+                                data: fileData,
+                                size: fileData.byteLength,
+                                type: 'pdf'
+                            });
+                        }
+                        // Verificar se é um PPTX
+                        else if (lowerFilename.endsWith('.pptx')) {
+                            const fileData = await file.async('arraybuffer');
+                            const fullPath = `${zipFileName}/${filename}`;
+
+                            extractedFiles.push({
+                                filename: fullPath,
+                                data: fileData,
+                                size: fileData.byteLength,
+                                type: 'pptx'
+                            });
+                        }
+                    }
+                };
+
+                await processZipEntry(zip);
+                return extractedFiles;
+            }
+
+            showResults() {
+                this.resultsSection.style.display = 'block';
+                
+                // Criar resumo
+                const totalTexts = this.extractedTexts.length;
+                const totalErrors = this.errors.length;
+                const totalFiles = this.files.length;
+                const totalWords = this.extractedTexts.reduce((sum, item) => 
+                    sum + item.text.split(/\s+/).length, 0
+                );
+                const totalChars = this.extractedTexts.reduce((sum, item) => 
+                    sum + item.text.length, 0
+                );
+
+                this.resultsSummary.innerHTML = `
+                    <h3>📊 Resumo do Processamento</h3>
+                    <div class="progress-stats">
+                        <div class="stat-item">
+                            <div class="stat-number">${totalFiles}</div>
+                            <div class="stat-label">Arquivos Selecionados</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">${totalTexts}</div>
+                            <div class="stat-label">Textos Extraídos</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">${totalWords.toLocaleString()}</div>
+                            <div class="stat-label">Total de Palavras</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">${totalChars.toLocaleString()}</div>
+                            <div class="stat-label">Total de Caracteres</div>
+                        </div>
+                    </div>
+                `;
+
+                // Mostrar preview do texto
+                const allText = this.extractedTexts.map(item => 
+                    `=== ${item.filename} ===\n${item.text}`
+                ).join('\n\n');
+
+                this.textPreview.textContent = allText.length > 5000 ? 
+                    allText.substring(0, 5000) + '\n\n... (texto truncado para preview)' : 
+                    allText;
+
+                // Mostrar erros se houver
+                if (this.errors.length > 0) {
+                    this.errorList.style.display = 'block';
+                    this.errorItems.innerHTML = this.errors.map(error => 
+                        `<div class="error-item">📄 ${error.filename}: ${error.error}</div>`
+                    ).join('');
+                }
+
+                this.showNotification(
+                    `Processamento concluído! ${totalTexts} arquivos extraídos com sucesso.`
+                );
+            }
+
+            async copyToClipboard() {
+                const allText = this.extractedTexts.map(item => 
+                    `=== ${item.filename} ===\n${item.text}`
+                ).join('\n\n');
+
+                try {
+                    await navigator.clipboard.writeText(allText);
+                    this.showNotification('Texto copiado para a área de transferência!');
+                } catch (error) {
+                    this.showNotification('Erro ao copiar texto', 'error');
+                }
+            }
+
+            downloadAsText() {
+                const allText = this.extractedTexts.map(item => 
+                    `=== ${item.filename} ===\n${item.text}`
+                ).join('\n\n');
+
+                const now = new Date();
+                const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                const filename = `Textos_PDFs_${this.extractedTexts.length}arquivos_${timestamp}.txt`;
+
+                const blob = new Blob([allText], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                this.showNotification(`Arquivo ${filename} baixado com sucesso!`);
+            }
+
+            clearResults() {
+                this.files = [];
+                this.extractedTexts = [];
+                this.errors = [];
+                this.progressSection.style.display = 'none';
+                this.resultsSection.style.display = 'none';
+                this.errorList.style.display = 'none';
+                this.fileInput.value = '';
+                
+                this.showNotification('Resultados limpos!');
+            }
+
+            showNotification(message, type = 'success') {
+                this.notification.textContent = message;
+                this.notification.className = `notification ${type}`;
+                this.notification.classList.add('show');
+
+                setTimeout(() => {
+                    this.notification.classList.remove('show');
+                }, 3000);
+            }
+        }
+
+        // Inicializar o aplicativo
+        document.addEventListener('DOMContentLoaded', () => {
+            new PDFTextExtractor();
+        });
+    </script>
+</body>
+</html>
