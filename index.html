@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Extrator de Texto - PDF & PowerPoint</title>
+    <title>Extrator de Texto - PDF, Word, PowerPoint & TXT</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -330,17 +331,17 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📄 Extrator de Texto PDF & PowerPoint</h1>
-            <p>Arraste arquivos, pastas inteiras, PDFs, PPTX ou ZIPs para extrair todo o texto de uma vez</p>
+            <h1>📄 Extrator de Texto Universal</h1>
+            <p>Arraste arquivos, pastas inteiras, PDFs, Word (DOCX), PowerPoint (PPTX), TXT ou ZIPs para extrair todo o texto de uma vez</p>
         </div>
 
         <div class="main-content">
             <div class="drop-zone" id="dropZone">
                 <div class="drop-zone-content">
                     <div class="drop-icon">📁</div>
-                    <h3>Arraste seus arquivos, pastas, PDF, PPTX ou ZIP aqui</h3>
+                    <h3>Arraste seus arquivos, pastas ou ZIP aqui</h3>
                     <p>Ou clique para selecionar<br>
-                    <small>Suporta PDFs, PowerPoints (PPTX), pastas inteiras e ZIPs (incluindo pastas aninhadas)</small></p>
+                    <small>Suporta PDF, Word (DOCX/DOC), PowerPoint (PPTX), TXT, pastas inteiras e ZIPs</small></p>
                     <button class="select-files-btn" onclick="document.getElementById('fileInput').click()">
                         Selecionar Arquivos
                     </button>
@@ -350,7 +351,7 @@
                 </div>
             </div>
 
-            <input type="file" id="fileInput" class="file-input" multiple accept=".pdf,.pptx,.zip" />
+            <input type="file" id="fileInput" class="file-input" multiple accept=".pdf,.pptx,.docx,.doc,.txt,.zip" />
             <input type="file" id="folderInput" class="file-input" webkitdirectory directory multiple />
 
             <div class="progress-section" id="progressSection">
@@ -524,14 +525,20 @@
                         file.type === 'application/zip' ||
                         file.type === 'application/x-zip-compressed' ||
                         file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+                        file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+                        file.type === 'application/msword' ||
+                        file.type === 'text/plain' ||
                         fileName.endsWith('.pdf') ||
                         fileName.endsWith('.zip') ||
-                        fileName.endsWith('.pptx')
+                        fileName.endsWith('.pptx') ||
+                        fileName.endsWith('.docx') ||
+                        fileName.endsWith('.doc') ||
+                        fileName.endsWith('.txt')
                     );
                 });
 
                 if (files.length === 0) {
-                    this.showNotification('Nenhum arquivo PDF, PPTX ou ZIP encontrado!', 'error');
+                    this.showNotification('Nenhum arquivo suportado encontrado!', 'error');
                     return;
                 }
 
@@ -603,6 +610,10 @@
                     const isPPTX = file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
                                    fileName.endsWith('.pptx');
                     const isPDF = file.type === 'application/pdf' || fileName.endsWith('.pdf');
+                    const isWord = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+                                   file.type === 'application/msword' ||
+                                   fileName.endsWith('.docx') || fileName.endsWith('.doc');
+                    const isTXT = file.type === 'text/plain' || fileName.endsWith('.txt');
 
                     if (isZip) {
                         try {
@@ -627,6 +638,24 @@
                             size: file.size,
                             isFile: true,
                             type: 'pptx'
+                        });
+                        totalFilesCount++;
+                    } else if (isWord) {
+                        allPDFsToProcess.push({
+                            filename: file.name,
+                            data: file,
+                            size: file.size,
+                            isFile: true,
+                            type: 'word'
+                        });
+                        totalFilesCount++;
+                    } else if (isTXT) {
+                        allPDFsToProcess.push({
+                            filename: file.name,
+                            data: file,
+                            size: file.size,
+                            isFile: true,
+                            type: 'txt'
                         });
                         totalFilesCount++;
                     } else if (isPDF) {
@@ -666,6 +695,18 @@
                                 text = await this.extractTextFromPPTX(fileItem.data);
                             } else {
                                 text = await this.extractTextFromPPTXBuffer(fileItem.data);
+                            }
+                        } else if (fileType === 'word') {
+                            if (fileItem.isFile) {
+                                text = await this.extractTextFromWord(fileItem.data);
+                            } else {
+                                text = await this.extractTextFromWordBuffer(fileItem.data);
+                            }
+                        } else if (fileType === 'txt') {
+                            if (fileItem.isFile) {
+                                text = await this.extractTextFromTXT(fileItem.data);
+                            } else {
+                                text = await this.extractTextFromTXTBuffer(fileItem.data);
                             }
                         } else {
                             if (fileItem.isFile) {
@@ -788,6 +829,30 @@
                 return texts.join(' ');
             }
 
+            async extractTextFromWord(file) {
+                const arrayBuffer = await file.arrayBuffer();
+                return await this.extractTextFromWordBuffer(arrayBuffer);
+            }
+
+            async extractTextFromWordBuffer(arrayBuffer) {
+                try {
+                    const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                    return result.value;
+                } catch (error) {
+                    throw new Error(`Erro ao processar Word: ${error.message}`);
+                }
+            }
+
+            async extractTextFromTXT(file) {
+                const text = await file.text();
+                return text;
+            }
+
+            async extractTextFromTXTBuffer(arrayBuffer) {
+                const decoder = new TextDecoder('utf-8');
+                return decoder.decode(arrayBuffer);
+            }
+
             async extractFilesFromZip(zipFile, zipFileName) {
                 const arrayBuffer = await zipFile.arrayBuffer();
                 const zip = await JSZip.loadAsync(arrayBuffer);
@@ -829,6 +894,30 @@
                                 data: fileData,
                                 size: fileData.byteLength,
                                 type: 'pptx'
+                            });
+                        }
+                        // Verificar se é um Word
+                        else if (lowerFilename.endsWith('.docx') || lowerFilename.endsWith('.doc')) {
+                            const fileData = await file.async('arraybuffer');
+                            const fullPath = `${zipFileName}/${filename}`;
+
+                            extractedFiles.push({
+                                filename: fullPath,
+                                data: fileData,
+                                size: fileData.byteLength,
+                                type: 'word'
+                            });
+                        }
+                        // Verificar se é um TXT
+                        else if (lowerFilename.endsWith('.txt')) {
+                            const fileData = await file.async('arraybuffer');
+                            const fullPath = `${zipFileName}/${filename}`;
+
+                            extractedFiles.push({
+                                filename: fullPath,
+                                data: fileData,
+                                size: fileData.byteLength,
+                                type: 'txt'
                             });
                         }
                     }
