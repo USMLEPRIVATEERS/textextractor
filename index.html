@@ -341,7 +341,8 @@
                     <div class="drop-icon">📁</div>
                     <h3>Arraste seus arquivos, pastas ou ZIP aqui</h3>
                     <p>Ou clique para selecionar<br>
-                    <small>Suporta PDF, Word (DOCX/DOC), PowerPoint (PPTX), TXT, pastas inteiras e ZIPs</small></p>
+                    <small>Suporta PDF, Word (DOCX/DOC), PowerPoint (PPTX), TXT, pastas inteiras e ZIPs</small><br>
+                    <strong style="color: #4CAF50;">✨ Modo Cumulativo: Adicione múltiplos arquivos em várias etapas!</strong></p>
                     <button class="select-files-btn" onclick="document.getElementById('fileInput').click()">
                         Selecionar Arquivos
                     </button>
@@ -588,19 +589,25 @@
                 }
 
                 this.isProcessing = true;
-                this.files = files;
-                this.extractedTexts = [];
-                this.errors = [];
+
+                // MODO CUMULATIVO: Não resetar os arrays, apenas adicionar novos arquivos
+                // this.extractedTexts = [];  // NÃO RESETAR
+                // this.errors = [];  // NÃO RESETAR
+
+                // Guardar quantos arquivos já tínhamos antes
+                const previousSuccessCount = this.extractedTexts.length;
+                const previousErrorCount = this.errors.length;
 
                 // Mostrar seção de progresso
                 this.progressSection.style.display = 'block';
-                this.resultsSection.style.display = 'none';
+                // NÃO esconder resultados se já houver conteúdo
+                // this.resultsSection.style.display = 'none';
 
                 // Primeiro, expandir arquivos ZIP
                 let allPDFsToProcess = [];
                 let totalFilesCount = 0;
 
-                this.progressText.textContent = 'Analisando arquivos...';
+                this.progressText.textContent = 'Analisando novos arquivos...';
 
                 for (const file of files) {
                     const fileName = file.name.toLowerCase();
@@ -670,12 +677,13 @@
                     }
                 }
 
-                // Inicializar contadores
-                this.totalFilesEl.textContent = totalFilesCount;
-                this.processedFilesEl.textContent = '0';
-                this.successFilesEl.textContent = '0';
-                this.errorFilesEl.textContent = this.errors.length;
-                this.progressBar.style.width = '0%';
+                // Atualizar contadores (modo cumulativo - mostrar total acumulado)
+                const totalAccumulatedFiles = previousSuccessCount + previousErrorCount + totalFilesCount;
+                this.totalFilesEl.textContent = totalAccumulatedFiles;
+                this.processedFilesEl.textContent = previousSuccessCount + previousErrorCount;
+                this.successFilesEl.textContent = previousSuccessCount;
+                this.errorFilesEl.textContent = previousErrorCount;
+                this.progressBar.style.width = totalFilesCount > 0 ? ((previousSuccessCount + previousErrorCount) / totalAccumulatedFiles * 100) + '%' : '0%';
                 this.progressText.textContent = 'Iniciando extração de texto...';
 
                 // Processar todos os arquivos (PDFs e PPTXs)
@@ -730,12 +738,13 @@
                         this.errorFilesEl.textContent = this.errors.length;
                     }
 
-                    // Atualizar progresso
-                    const processed = i + 1;
-                    this.processedFilesEl.textContent = processed;
-                    const percentage = (processed / totalFilesCount) * 100;
+                    // Atualizar progresso (modo cumulativo)
+                    const processedNow = i + 1;
+                    const totalProcessed = previousSuccessCount + previousErrorCount + processedNow;
+                    this.processedFilesEl.textContent = totalProcessed;
+                    const percentage = (totalProcessed / totalAccumulatedFiles) * 100;
                     this.progressBar.style.width = percentage + '%';
-                    this.progressText.textContent = `${processed} de ${totalFilesCount} arquivos processados (${percentage.toFixed(1)}%)`;
+                    this.progressText.textContent = `${processedNow} de ${totalFilesCount} novos arquivos processados | Total acumulado: ${totalProcessed}/${totalAccumulatedFiles} (${percentage.toFixed(1)}%)`;
 
                     // Pequeno delay para não travar a interface
                     await new Promise(resolve => setTimeout(resolve, 10));
@@ -743,7 +752,11 @@
 
                 this.currentFileEl.style.display = 'none';
                 this.isProcessing = false;
-                this.showResults();
+
+                // Mostrar notificação com informação de arquivos adicionados
+                const newFilesAdded = this.extractedTexts.length - previousSuccessCount;
+                const newErrors = this.errors.length - previousErrorCount;
+                this.showResults(newFilesAdded, newErrors, previousSuccessCount > 0);
             }
 
             async extractTextFromPDF(file) {
@@ -927,30 +940,31 @@
                 return extractedFiles;
             }
 
-            showResults() {
+            showResults(newFilesAdded = 0, newErrors = 0, isCumulative = false) {
                 this.resultsSection.style.display = 'block';
-                
+
                 // Criar resumo
                 const totalTexts = this.extractedTexts.length;
                 const totalErrors = this.errors.length;
-                const totalFiles = this.files.length;
-                const totalWords = this.extractedTexts.reduce((sum, item) => 
+                const totalWords = this.extractedTexts.reduce((sum, item) =>
                     sum + item.text.split(/\s+/).length, 0
                 );
-                const totalChars = this.extractedTexts.reduce((sum, item) => 
+                const totalChars = this.extractedTexts.reduce((sum, item) =>
                     sum + item.text.length, 0
                 );
 
+                // Mensagem diferente para modo cumulativo
+                const summaryTitle = isCumulative
+                    ? `📊 Resumo Acumulado (+ ${newFilesAdded} novos arquivos)`
+                    : `📊 Resumo do Processamento`;
+
                 this.resultsSummary.innerHTML = `
-                    <h3>📊 Resumo do Processamento</h3>
+                    <h3>${summaryTitle}</h3>
+                    ${isCumulative ? `<p style="color: #4CAF50; font-weight: bold; margin-bottom: 15px;">✅ Modo Cumulativo Ativo - Continue adicionando arquivos!</p>` : ''}
                     <div class="progress-stats">
                         <div class="stat-item">
-                            <div class="stat-number">${totalFiles}</div>
-                            <div class="stat-label">Arquivos Selecionados</div>
-                        </div>
-                        <div class="stat-item">
                             <div class="stat-number">${totalTexts}</div>
-                            <div class="stat-label">Textos Extraídos</div>
+                            <div class="stat-label">Total de Textos Extraídos</div>
                         </div>
                         <div class="stat-item">
                             <div class="stat-number">${totalWords.toLocaleString()}</div>
@@ -960,29 +974,40 @@
                             <div class="stat-number">${totalChars.toLocaleString()}</div>
                             <div class="stat-label">Total de Caracteres</div>
                         </div>
+                        ${totalErrors > 0 ? `
+                        <div class="stat-item">
+                            <div class="stat-number" style="color: #f44336;">${totalErrors}</div>
+                            <div class="stat-label">Erros</div>
+                        </div>
+                        ` : ''}
                     </div>
                 `;
 
                 // Mostrar preview do texto
-                const allText = this.extractedTexts.map(item => 
+                const allText = this.extractedTexts.map(item =>
                     `=== ${item.filename} ===\n${item.text}`
                 ).join('\n\n');
 
-                this.textPreview.textContent = allText.length > 5000 ? 
-                    allText.substring(0, 5000) + '\n\n... (texto truncado para preview)' : 
+                this.textPreview.textContent = allText.length > 5000 ?
+                    allText.substring(0, 5000) + '\n\n... (texto truncado para preview)' :
                     allText;
 
                 // Mostrar erros se houver
                 if (this.errors.length > 0) {
                     this.errorList.style.display = 'block';
-                    this.errorItems.innerHTML = this.errors.map(error => 
+                    this.errorItems.innerHTML = this.errors.map(error =>
                         `<div class="error-item">📄 ${error.filename}: ${error.error}</div>`
                     ).join('');
+                } else {
+                    this.errorList.style.display = 'none';
                 }
 
-                this.showNotification(
-                    `Processamento concluído! ${totalTexts} arquivos extraídos com sucesso.`
-                );
+                // Mensagem de notificação
+                const message = isCumulative
+                    ? `✅ ${newFilesAdded} novos arquivos adicionados! Total acumulado: ${totalTexts} arquivos`
+                    : `Processamento concluído! ${totalTexts} arquivos extraídos com sucesso.`;
+
+                this.showNotification(message);
             }
 
             async copyToClipboard() {
