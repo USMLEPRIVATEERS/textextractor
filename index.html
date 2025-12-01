@@ -356,6 +356,24 @@
             <input type="file" id="fileInput" class="file-input" multiple accept=".pdf,.pptx,.docx,.doc,.xlsx,.xls,.csv,.txt,.zip" />
             <input type="file" id="folderInput" class="file-input" webkitdirectory directory multiple />
 
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                <h4 style="margin-bottom: 10px; color: #333;">📄 Opções de Extração de PDF</h4>
+                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                    <label style="color: #666; font-size: 0.95em;">
+                        <strong>Páginas para extrair:</strong>
+                    </label>
+                    <input
+                        type="text"
+                        id="pageRangeInput"
+                        placeholder="Deixe vazio para todas, ou ex: 1-5, 10, 15-20"
+                        style="flex: 1; min-width: 300px; padding: 10px; border: 2px solid #ddd; border-radius: 8px; font-size: 0.95em;"
+                    />
+                    <small style="color: #666; width: 100%;">
+                        💡 Dica: Use intervalos (1-5) ou páginas específicas (10, 15). Se o PDF tiver menos páginas, extrairá o máximo disponível.
+                    </small>
+                </div>
+            </div>
+
             <div class="progress-section" id="progressSection">
                 <div class="progress-info">
                     <div class="progress-stats">
@@ -432,10 +450,11 @@
                 this.dropZone = document.getElementById('dropZone');
                 this.fileInput = document.getElementById('fileInput');
                 this.folderInput = document.getElementById('folderInput');
+                this.pageRangeInput = document.getElementById('pageRangeInput');
                 this.progressSection = document.getElementById('progressSection');
                 this.resultsSection = document.getElementById('resultsSection');
                 this.notification = document.getElementById('notification');
-                
+
                 // Elementos de progresso
                 this.totalFilesEl = document.getElementById('totalFiles');
                 this.processedFilesEl = document.getElementById('processedFiles');
@@ -800,32 +819,75 @@
                 this.showResults(newFilesAdded, newErrors, previousSuccessCount > 0);
             }
 
-            async extractTextFromPDF(file) {
-                const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
-                let fullText = '';
-
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const textContent = await page.getTextContent();
-                    const pageText = textContent.items.map(item => item.str).join(' ');
-                    fullText += pageText + '\n\n';
+            // Função para parsear intervalos de páginas (ex: "1-5, 10, 15-20")
+            parsePageRanges(rangeString) {
+                if (!rangeString || rangeString.trim() === '') {
+                    return null; // null significa "todas as páginas"
                 }
 
-                return fullText.trim();
+                const pages = new Set();
+                const parts = rangeString.split(',');
+
+                for (const part of parts) {
+                    const trimmed = part.trim();
+
+                    if (trimmed.includes('-')) {
+                        // É um intervalo (ex: "1-5")
+                        const [start, end] = trimmed.split('-').map(n => parseInt(n.trim()));
+                        if (!isNaN(start) && !isNaN(end)) {
+                            for (let i = start; i <= end; i++) {
+                                pages.add(i);
+                            }
+                        }
+                    } else {
+                        // É uma página específica (ex: "10")
+                        const pageNum = parseInt(trimmed);
+                        if (!isNaN(pageNum)) {
+                            pages.add(pageNum);
+                        }
+                    }
+                }
+
+                return pages.size > 0 ? pages : null;
+            }
+
+            // Função para verificar se uma página deve ser extraída
+            shouldExtractPage(pageNumber, allowedPages) {
+                if (!allowedPages) {
+                    return true; // Se allowedPages é null, extrai todas
+                }
+                return allowedPages.has(pageNumber);
+            }
+
+            async extractTextFromPDF(file) {
+                const arrayBuffer = await file.arrayBuffer();
+                return await this.extractTextFromPDFBuffer(arrayBuffer);
             }
 
             async extractTextFromPDFBuffer(arrayBuffer) {
                 const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
+                // Obter o intervalo de páginas do input
+                const pageRangeString = this.pageRangeInput ? this.pageRangeInput.value : '';
+                const allowedPages = this.parsePageRanges(pageRangeString);
+
                 let fullText = '';
+                let extractedPages = 0;
 
                 for (let i = 1; i <= pdf.numPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const textContent = await page.getTextContent();
-                    const pageText = textContent.items.map(item => item.str).join(' ');
-                    fullText += pageText + '\n\n';
+                    // Verificar se esta página deve ser extraída
+                    if (this.shouldExtractPage(i, allowedPages)) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(' ');
+                        fullText += `--- Página ${i} ---\n${pageText}\n\n`;
+                        extractedPages++;
+                    }
+                }
+
+                // Se nenhuma página foi extraída, retornar mensagem informativa
+                if (extractedPages === 0) {
+                    return `[PDF tem ${pdf.numPages} página(s), mas nenhuma está no intervalo especificado]`;
                 }
 
                 return fullText.trim();
